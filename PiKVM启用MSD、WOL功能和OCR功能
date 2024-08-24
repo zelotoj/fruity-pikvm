@@ -1,0 +1,70 @@
+PiKVM启用MSD、WOL功能和OCR功能
+这篇文章主要讲一下PiKVM网页端实用的的三个功能如何开启：虚拟镜像、网络唤醒、文本识别。
+
+新建分区
+提示：Gparted在U盘系统上安装非常缓慢，作者在安装篇的网盘的链接中提供了包含此软件的系统镜像，刷入U盘后直接输入gparted即可启动磁盘分区软件。
+
+随便刷一个armbain系统到U盘，插到玩客云网口旁的USB口插电启动，连接ssh。
+
+#修改ssh配置，开启X11界面转发
+nano /etc/ssh/ssh_config
+
+ForwardAgent yes
+ForwardX11 yes
+ForwardX11Trusted yes
+#安装Gparted新建一个MSD分区
+
+#基于Ubuntu的系统执行此命令
+apt install xauth yaru-theme-unity yaru-theme-icon yaru-theme-gtk gparted
+
+#基于Debian的系统执行此命令
+#apt install xauth  gparted
+
+gparted
+如果没有打开软件界面请检查你的ssh终端是否支持X11转发功能。
+
+在打开的Gparted界面右键 /dev/mmcblp1p2 选择 Resize/Move 来调整分区，在Free space following框中输入新建分区的大小（可输入4096），再将分出来的空闲空间格式化为ext4格式，最后点击主界面选项卡下的绿底√应用应用刚才的选择即可。
+
+
+
+应用补丁
+#拔掉U盘重启进入EMMC系统添加分区
+nano /etc/fstab
+#在文件末尾添加如下挂载
+/dev/mmcblk1p3 /var/lib/kvmd/msd  ext4  nodev,nosuid,noexec,ro,errors=remount-ro,data=journal,X-kvmd.otgmsd-root=/var/lib/kvmd/msd,X-kvmd.otgmsd-user=kvmd  0 0
+#挂载分区，运行补丁，到/etc/kvmd/override.yaml修改msd选项为otg
+mount /dev/mmcblk1p3
+cd fruity-pikvm
+sudo ./msd-patch.sh
+
+
+如果打开网页发现没有出现MSD的话，需要重启主机或重启服务。
+
+systemctl restart kvmd-otg kvmd
+启用WOL
+WOL（Wake On LAN），即网络唤醒，在被控机支持的情况下（部分机器可能默认关闭，开启教程可参考 网络唤醒WOL（Wake On LAN） - 知乎 (zhihu.com)），可以通过网络唤醒设备开机，实现机器开停自由。更详细的介绍和配置可查阅官方教程。
+
+首先在获取被控机网卡的MAC地址记录下来（格式为linux小写），然后编辑 /etc/kvmd/override.yaml 添加如下内容，完成后重启服务 systemctl restart kvmd （请注意格式缩进，否则会导致服务启动失败）。
+
+	gpio:
+       drivers:
+           wol_server1:
+               type: wol
+               mac: MAC地址
+       scheme:
+           wol_server1:
+               driver: wol_server1
+               pin: 0
+               mode: output
+               switch: false
+       view:
+           table:
+               - ["#设备名称", "wol_server1|网络唤醒"]
+
+
+
+启用OCR
+OCR可以识别被控机显示的文字（分别支持中英文），其实这个功能是默认开启的不过没有中文语言包。下列命令可以安装中文语言包。
+
+apt install tesseract-ocr-chi-sim
+systemctl restart kvmd
