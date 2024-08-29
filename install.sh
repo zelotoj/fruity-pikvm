@@ -83,6 +83,7 @@ DEBURL="https://github.com/jacobbar/fruity-pikvm/releases/download/debfile/"
 sudo apt update
 sudo apt install -y nginx tesseract-ocr tesseract-ocr-eng janus libevent-dev libgpiod-dev
 if [ -f "$DEBFILE" ]; then
+  echo "-->> installing fruity-pikvm" 
   dpkg -i $DEBFILE
 else
   cd  /tmp
